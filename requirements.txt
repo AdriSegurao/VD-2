@@ -1,0 +1,2 @@
+vegafusion
+vl-convert-python>=1.8.0
