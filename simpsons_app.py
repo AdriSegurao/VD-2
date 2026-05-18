@@ -1,32 +1,14 @@
-"""
-The Simpsons — Visual Analytics
-Authors: Pablo Rodríguez Elvira, Adrián Segura Onorato
-Course:  Data Visualization · MDS/MEI · 2025–2026
-
-Run with:
-    streamlit run simpsons_app.py
-
-Expected CSV files in the same folder:
-    simpsons_character_totals.csv   columns: character, total_words, total_sentences, total_lines
-    simpsons_character_season.csv   columns: character, season, total_words, total_sentences, total_lines
-    simpsons_character_episode.csv  columns: character, season, number_in_season, title,
-                                              total_words, total_sentences, total_lines
-    simpsons_lines.csv              columns: character, season, number_in_season, title,
-                                              timestamp_in_ms, word_count, sentence_count
-"""
-
 from pathlib import Path
 
 import altair as alt
 import pandas as pd
 import streamlit as st
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Page config
-# ─────────────────────────────────────────────────────────────────────────────
+
+############################################ Page config ########################################
 st.set_page_config(
     page_title="The Simpsons — Visual Analytics",
-    page_icon="🍩",
+    page_icon="",
     layout="wide",
 )
 
@@ -53,9 +35,8 @@ try:
 except Exception:  # noqa: BLE001
     alt.data_transformers.disable_max_rows()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Data
-# ─────────────────────────────────────────────────────────────────────────────
+
+############################################# Data ############################################
 DATA_DIR = Path(__file__).parent if "__file__" in globals() else Path(".")
 
 
@@ -79,9 +60,7 @@ except FileNotFoundError as e:
     st.stop()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Shared constants
-# ─────────────────────────────────────────────────────────────────────────────
+############################################# Shared constants ############################################
 NONE = "— none —"
 
 LEVEL_COLS = {
@@ -102,11 +81,9 @@ palette = (tableau10 * ((len(characters_all) // 10) + 1))[: len(characters_all)]
 COLOR_SCALE = alt.Scale(domain=characters_all, range=palette)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Sidebar — single source of truth for all charts
-# ─────────────────────────────────────────────────────────────────────────────
+############################################# Sidebar — single source of truth for all charts ############################################
 with st.sidebar:
-    st.markdown("## 🍩 Simpsons Analytics")
+    st.markdown("## Simpsons Analytics")
     st.caption("Pablo Rodríguez Elvira · Adrián Segura Onorato")
     st.markdown("---")
 
@@ -194,9 +171,7 @@ def stroke_for_selection():
     return alt.condition(_predicate_selected(), alt.value(3.2), alt.value(1))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Q1 — totals per character (filtered by sidebar season range)
-# ─────────────────────────────────────────────────────────────────────────────
+############################################# Q1 ############################################
 def build_q1():
     col = LEVEL_COLS[level]["agg"]
     if col not in df_season.columns:
@@ -236,9 +211,7 @@ def build_q1():
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Q2 — evolution per season
-# ─────────────────────────────────────────────────────────────────────────────
+############################################# Q2 ############################################
 def build_q2():
     col = LEVEL_COLS[level]["agg"]
     if col not in df_season.columns:
@@ -283,10 +256,7 @@ def build_q2():
         )
     )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Q3 — episode-level comparison within a selected season
-# ─────────────────────────────────────────────────────────────────────────────
+############################################# Q3 ############################################
 def build_q3():
     col = LEVEL_COLS[level]["agg"]
     if col not in df_episode.columns:
@@ -349,9 +319,8 @@ def build_q3():
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Q4 — line-level comparison within a selected episode
-# ─────────────────────────────────────────────────────────────────────────────
+
+############################################# Q4 ############################################
 def build_q4():
     if char1 == NONE or char2 == NONE:
         return None
@@ -461,10 +430,8 @@ def build_q4():
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Layout — 2 × 2 grid
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown(f"### 🍩 The Simpsons — Visual Analytics  ·  *{LEVEL_LABEL[level]}*")
+############################################# Layout ############################################
+st.markdown(f"### The Simpsons — Visual Analytics  ·  *{LEVEL_LABEL[level]}*")
 
 # Row 1: Q1 — Q2
 r1c1, r1c2 = st.columns(2, gap="medium")
@@ -486,8 +453,8 @@ with r1c2:
 # Row 2: Q3 (centered via CSS)
 if char1 == NONE or char2 == NONE:
     st.info(
-        "⬅️ Pick **Character 1** *and* **Character 2** in the sidebar to "
-        "enable the episode-level comparison (Q3)."
+        "Pick **Character 1** *and* **Character 2** in the sidebar to "
+        "enable the season-level comparison (Q3)."
     )
 else:
     chart = build_q3()
@@ -501,8 +468,8 @@ else:
 # Row 3: Q4 (centered via CSS)
 if char1 == NONE or char2 == NONE:
     st.info(
-        "⬅️ Pick **Character 1** *and* **Character 2** in the sidebar to "
-        "enable the line-level comparison (Q4)."
+        "Pick **Character 1** *and* **Character 2** in the sidebar to "
+        "enable the episode-level comparison (Q4)."
     )
 else:
     chart = build_q4()
