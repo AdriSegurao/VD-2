@@ -29,7 +29,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Try vegafusion for big dataframes; fall back to disabling the 5k-row limit.
 try:
     alt.data_transformers.enable("vegafusion")
 except Exception:  # noqa: BLE001
@@ -81,10 +80,21 @@ palette = (tableau10 * ((len(characters_all) // 10) + 1))[: len(characters_all)]
 COLOR_SCALE = alt.Scale(domain=characters_all, range=palette)
 
 
+############################################# Global axis maxima ############################################
+GLOBAL_MAX_EPISODE = {
+    "words":     int(df_episode["total_words"].max())     + 50  if "total_words"     in df_episode.columns else 1,
+    "sentences": int(df_episode["total_sentences"].max()) + 50  if "total_sentences" in df_episode.columns else 1,
+    "lines":     int(df_episode["total_lines"].max())     + 50  if "total_lines"     in df_episode.columns else 1,
+}
+GLOBAL_MAX_LINE = {
+    "words":     int(df_lines["word_count"].max())     + 2 if "word_count"     in df_lines.columns else 1,
+    "sentences": int(df_lines["sentence_count"].max()) + 2 if "sentence_count" in df_lines.columns else 1,
+    "lines":     1,
+}
+
 ############################################# Sidebar — single source of truth for all charts ############################################
 with st.sidebar:
     st.markdown("## Simpsons Analytics")
-    st.caption("Pablo Rodríguez Elvira · Adrián Segura Onorato")
     st.markdown("---")
 
     level = st.radio(
@@ -136,17 +146,10 @@ with st.sidebar:
         eps_in_season = [1]
     episode_sel = st.selectbox("Episode (Q4)", options=eps_in_season, index=0)
 
-    st.markdown("---")
-    if st.button("Clear character selection", use_container_width=True):
-        st.session_state["char1"] = NONE
-        st.session_state["char2"] = NONE
-        st.rerun()
-
     with st.expander("About"):
         st.markdown(
-            "**Authors:** Pablo Rodríguez Elvira, Adrián Segura Onorato\n\n"
-            "**Course:** Data Visualization — MDS/MEI 2025–2026\n\n"
-            "Dataset: *The Simpsons by the Data* (Kaggle, P. Patil)."
+            "**Authors:** Pablo Rodríguez Elvira and Adrián Segura Onorato\n\n"
+            "**Course:** Data Visualization MDS - Second practical work\n\n"
         )
 
 
@@ -185,7 +188,7 @@ def build_q1():
     label = LEVEL_LABEL[level].lower()
     subtitle = (
         f"Seasons {s_lo}–{s_hi}" if s_lo != s_hi else f"Season {s_lo}"
-    ) + "  ·  Sidebar selection highlights"
+    )
 
     return (
         alt.Chart(sub)
@@ -260,16 +263,16 @@ def build_q2():
 def build_q3():
     col = LEVEL_COLS[level]["agg"]
     if col not in df_episode.columns:
-        return None
+        return None, None
     if char1 == NONE or char2 == NONE:
-        return None
+        return None, None
 
     sub = df_episode[
         (df_episode["season"] == season_sel)
         & (df_episode["character"].isin([char1, char2]))
     ].copy()
     if sub.empty:
-        return None
+        return None, None
 
     # Stable left/right grouping so colour order matches sidebar order
     sub["__grp"] = sub["character"].map({char1: "A", char2: "B"})
@@ -280,7 +283,8 @@ def build_q3():
         .encode(
             x=alt.X("number_in_season:O", title="Episode #", axis=alt.Axis(labelAngle=0)),
             xOffset=alt.XOffset("__grp:N", scale=alt.Scale(domain=["A", "B"])),
-            y=alt.Y(f"{col}:Q", title=f"{LEVEL_LABEL[level]} per episode"),
+            y=alt.Y(f"{col}:Q", title=f"{LEVEL_LABEL[level]} per episode",
+                    scale=alt.Scale(domain=[0, GLOBAL_MAX_EPISODE[level]])),
             color=alt.Color("character:N", scale=COLOR_SCALE, legend=None),
             tooltip=[
                 alt.Tooltip("character:N", title="Character"),
@@ -289,7 +293,14 @@ def build_q3():
                 alt.Tooltip(f"{col}:Q", title=LEVEL_LABEL[level], format=","),
             ],
         )
-        .properties(width=900, height=300)
+        .properties(
+            height=300,
+            title=alt.TitleParams(
+                f"Q3 · {LEVEL_LABEL[level]} per episode · Season {season_sel}",
+                subtitle=f"{char1}  vs.  {char2}",
+                fontSize=15,
+            ),
+        )
     )
 
     box = (
@@ -299,6 +310,7 @@ def build_q3():
             x=alt.X("character:N", title=None,
                     axis=alt.Axis(labelAngle=-15, labelLimit=120)),
             y=alt.Y(f"{col}:Q", title=LEVEL_LABEL[level],
+                    scale=alt.Scale(domain=[0, GLOBAL_MAX_EPISODE[level]]),
                     axis=alt.Axis(title=None)),
             color=alt.Color("character:N", scale=COLOR_SCALE, legend=None),
             tooltip=[
@@ -306,24 +318,18 @@ def build_q3():
                 alt.Tooltip(f"{col}:Q", title=LEVEL_LABEL[level], format=","),
             ],
         )
-        .properties(width=140, height=300,
+        .properties(height=300,
                     title=alt.TitleParams("Season distribution", fontSize=12))
     )
 
-    return alt.hconcat(bars, box).resolve_scale(color="shared").properties(
-        title=alt.TitleParams(
-            f"Q3 · {LEVEL_LABEL[level]} per episode · Season {season_sel}",
-            subtitle=f"{char1}  vs.  {char2}",
-            fontSize=15,
-        )
-    )
+    return bars, box
 
 
 
 ############################################# Q4 ############################################
 def build_q4():
     if char1 == NONE or char2 == NONE:
-        return None
+        return None, None
 
     sub = df_lines[
         (df_lines["season"] == season_sel)
@@ -331,7 +337,7 @@ def build_q4():
         & (df_lines["character"].isin([char1, char2]))
     ].copy()
     if sub.empty:
-        return None
+        return None, None
 
     if "timestamp_in_ms" in sub.columns:
         sub["timestamp_min"] = sub["timestamp_in_ms"] / 60000.0
@@ -355,7 +361,14 @@ def build_q4():
                     alt.Tooltip("timestamp_min:Q", title="Time (min)", format=".2f"),
                 ],
             )
-            .properties(width=900, height=300)
+            .properties(
+                height=300,
+                title=alt.TitleParams(
+                    f"Q4 · Lines through episode · S{season_sel} · E{episode_sel}",
+                    subtitle=f"{char1}  vs.  {char2}",
+                    fontSize=15,
+                ),
+            )
         )
         side = (
             alt.Chart(sub)
@@ -369,21 +382,15 @@ def build_q4():
                     alt.Tooltip("count():Q", title="Lines"),
                 ],
             )
-            .properties(width=140, height=300,
+            .properties(height=300,
                         title=alt.TitleParams("Total lines", fontSize=12))
         )
-        return alt.hconcat(main, side).resolve_scale(color="shared").properties(
-            title=alt.TitleParams(
-                f"Q4 · Lines through episode · S{season_sel} · E{episode_sel}",
-                subtitle=f"{char1}  vs.  {char2}",
-                fontSize=15,
-            )
-        )
+        return main, side
 
-    # ── words / sentences level: scatter (per-line metric over time) + boxplot
+    # ── words / sentences level: scatter + boxplot
     col = LEVEL_COLS[level]["line"]
     if col is None or col not in sub.columns:
-        return None
+        return None, None
 
     scatter = (
         alt.Chart(sub)
@@ -391,7 +398,8 @@ def build_q4():
         .encode(
             x=alt.X("timestamp_min:Q", title="Time (minutes)",
                     scale=alt.Scale(nice=False)),
-            y=alt.Y(f"{col}:Q", title=f"{LEVEL_LABEL[level]} per line"),
+            y=alt.Y(f"{col}:Q", title=f"{LEVEL_LABEL[level]} per line",
+                    scale=alt.Scale(domain=[0, GLOBAL_MAX_LINE[level]])),
             color=alt.Color("character:N", scale=COLOR_SCALE, legend=None),
             tooltip=[
                 alt.Tooltip("character:N", title="Character"),
@@ -400,7 +408,14 @@ def build_q4():
                 alt.Tooltip(f"{col}:Q", title=LEVEL_LABEL[level]),
             ],
         )
-        .properties(width=900, height=300)
+        .properties(
+            height=300,
+            title=alt.TitleParams(
+                f"Q4 · {LEVEL_LABEL[level]} per line · S{season_sel} · E{episode_sel}",
+                subtitle=f"{char1}  vs.  {char2}",
+                fontSize=15,
+            ),
+        )
     )
 
     box = (
@@ -410,6 +425,7 @@ def build_q4():
             x=alt.X("character:N", title=None,
                     axis=alt.Axis(labelAngle=-15, labelLimit=120)),
             y=alt.Y(f"{col}:Q", title=LEVEL_LABEL[level],
+                    scale=alt.Scale(domain=[0, GLOBAL_MAX_LINE[level]]),
                     axis=alt.Axis(title=None)),
             color=alt.Color("character:N", scale=COLOR_SCALE, legend=None),
             tooltip=[
@@ -417,21 +433,15 @@ def build_q4():
                 alt.Tooltip(f"{col}:Q", title=LEVEL_LABEL[level]),
             ],
         )
-        .properties(width=140, height=300,
+        .properties(height=300,
                     title=alt.TitleParams("Episode distribution", fontSize=12))
     )
 
-    return alt.hconcat(scatter, box).resolve_scale(color="shared").properties(
-        title=alt.TitleParams(
-            f"Q4 · {LEVEL_LABEL[level]} per line · S{season_sel} · E{episode_sel}",
-            subtitle=f"{char1}  vs.  {char2}",
-            fontSize=15,
-        )
-    )
+    return scatter, box
 
 
 ############################################# Layout ############################################
-st.markdown(f"### The Simpsons — Visual Analytics  ·  *{LEVEL_LABEL[level]}*")
+st.markdown(f"### The Simpsons Dialogue Explorer  ·  *{LEVEL_LABEL[level]}*")
 
 # Row 1: Q1 — Q2
 r1c1, r1c2 = st.columns(2, gap="medium")
@@ -450,31 +460,39 @@ with r1c2:
     else:
         st.info(f"No `{LEVEL_COLS[level]['agg']}` column found in the season dataset.")
 
-# Row 2: Q3 (centered via CSS)
+# Row 2: Q3 
 if char1 == NONE or char2 == NONE:
     st.info(
         "Pick **Character 1** *and* **Character 2** in the sidebar to "
         "enable the season-level comparison (Q3)."
     )
 else:
-    chart = build_q3()
-    if chart is not None:
-        st.altair_chart(chart, use_container_width=False)
+    bars, box = build_q3()
+    if bars is not None:
+        q3_main, q3_side = st.columns([6, 1], gap="small")
+        with q3_main:
+            st.altair_chart(bars, use_container_width=True)
+        with q3_side:
+            st.altair_chart(box, use_container_width=True)
     else:
         st.warning(
             f"No data for **{char1}** vs **{char2}** in season {season_sel}."
         )
 
-# Row 3: Q4 (centered via CSS)
+# Row 3: Q4
 if char1 == NONE or char2 == NONE:
     st.info(
         "Pick **Character 1** *and* **Character 2** in the sidebar to "
         "enable the episode-level comparison (Q4)."
     )
 else:
-    chart = build_q4()
-    if chart is not None:
-        st.altair_chart(chart, use_container_width=False)
+    main_q4, side_q4 = build_q4()
+    if main_q4 is not None:
+        q4_main, q4_side = st.columns([6, 1], gap="small")
+        with q4_main:
+            st.altair_chart(main_q4, use_container_width=True)
+        with q4_side:
+            st.altair_chart(side_q4, use_container_width=True)
     else:
         st.warning(
             f"No data for **{char1}** vs **{char2}** in S{season_sel} · E{episode_sel}."
