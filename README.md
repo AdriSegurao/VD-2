@@ -21,6 +21,16 @@ Run the notebooks in this order:
 1. **`simpsons_data_processing.ipynb`** — cleans the raw CSV files and produces the four output datasets.
 2. **`charts.ipynb`** — loads the processed datasets and renders the interactive charts.
 
+## Running the Dashboard
+
+The interactive dashboard is built with Streamlit. Once the setup is complete and the data has been processed (see [Usage](#usage)), launch it with:
+
+```bash
+streamlit run simpsons_app.py
+```
+
+This will open the dashboard automatically in your browser at `http://localhost:8501`.
+
 ## Data
 
 Place the raw CSV files in the project root before running the processing notebook:
